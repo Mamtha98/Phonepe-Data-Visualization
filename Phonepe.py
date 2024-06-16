@@ -16,7 +16,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 
-
+#Extract data from MySql tables
 mydb = mysql.connector.connect(
     host="localhost",
     user="root",
@@ -63,6 +63,8 @@ mycursor.execute("""select *  from top_pincode_user;""")
 TPU = mycursor.fetchall()
 top_pincode_user = pd.DataFrame(TPU,columns = ["States", "Years", "Quarter", "Pincode", "Registered_Users"])
 
+
+#Required Functions
 def PieTT(df,gb1,sv1,sv2):
     ATAS1=df.groupby(gb1)[[sv1, sv2]].sum()
     ATAS1.reset_index(inplace= True)
@@ -352,7 +354,7 @@ def drop_down(df,i):
         option_dropdown3 = st.selectbox("Select the quarter",unique_quarter, index=None, key='k'+str(i))
         i+=1
     return (option_dropdown1,option_dropdown2,option_dropdown3)
-
+#Streamlit Portion
 # SETTING PAGE CONFIGURATIONS
 st.set_page_config(page_title= "Phonepe Pulse Data Visualization - Mamtha S")
 

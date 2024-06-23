@@ -16,7 +16,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 
-#Extract data from MySql tables
+
 mydb = mysql.connector.connect(
     host="localhost",
     user="root",
@@ -27,307 +27,284 @@ mycursor = mydb.cursor()
 #Create SQLAlchemy engine
 engine = create_engine("mysql+mysqlconnector://root:root@localhost/Phonepe")
 
-mycursor.execute("""select *  from agg_transaction;""")
-AT = mycursor.fetchall()
-agg_transaction = pd.DataFrame(AT,columns = ["States", "Years", "Quarter", "Transaction_type", "Transaction_count","Transaction_amount"])
-
-mycursor.execute("""select * from agg_user;""")
-AU = mycursor.fetchall()
-agg_user = pd.DataFrame(AU,columns = ["States", "Years", "Quarter", "Registered_Users", "App_Opens"])
-
-mycursor.execute("""select * from agg_user_brand;""")
-AUB = mycursor.fetchall()
-agg_user_brand = pd.DataFrame(AUB,columns = ["States", "Years", "Quarter", "Mobile_brand", "User_count","percentage_of_user"])
-
-mycursor.execute("""select * from map_transaction;""")
-MT = mycursor.fetchall()
-map_transaction = pd.DataFrame(MT,columns = ["States", "Years", "Quarter", "District", "Transaction_count","Transaction_amount"])
-
-mycursor.execute("""select * from map_user;""")
-MU = mycursor.fetchall()
-map_user = pd.DataFrame(MU,columns = ["States", "Years", "Quarter", "District", "Registered_Users","App_Opens"])
-
-mycursor.execute("""select *  from top_district_transaction;""")
-TDT = mycursor.fetchall()
-top_district_transaction = pd.DataFrame(TDT,columns = ["States", "Years", "Quarter", "District", "Transaction_count","Transaction_amount"])
-
-mycursor.execute("""select *  from top_pincode_transaction;""")
-TPT = mycursor.fetchall()
-top_pincode_transaction = pd.DataFrame(TPT,columns = ["States", "Years", "Quarter", "Pincode", "Transaction_count","Transaction_amount"])
-
-mycursor.execute("""select *  from top_district_user;""")
-TDU = mycursor.fetchall()
-top_district_user = pd.DataFrame(TDU,columns = ["States", "Years", "Quarter", "District", "Registered_Users"])
-
-mycursor.execute("""select *  from top_pincode_user;""")
-TPU = mycursor.fetchall()
-top_pincode_user = pd.DataFrame(TPU,columns = ["States", "Years", "Quarter", "Pincode", "Registered_Users"])
-
-
-#Required Functions
-def PieTT(df,gb1,sv1,sv2):
-    ATAS1=df.groupby(gb1)[[sv1, sv2]].sum()
+def PieTT(where_clause,table_name,gb1,sv1,sv2):
+    mycursor.execute(f"select {gb1}, sum({sv1}), sum({sv2}) from {table_name} {where_clause} group by 1")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1,sv2])
     ATAS1.reset_index(inplace= True)
     c1,c2 = st.columns(2)
     with c1:
-        fig_ATAS1 = px.pie(ATAS1, values=sv1, names= gb1,
+        fig_ATAS1 = px.pie(ATAS1, values=sv1, names=gb1 ,
             title=f'Total {sv1} for each {gb1}',
             hover_data=[sv1],color_discrete_sequence=px.colors.sequential.Sunset)
         fig_ATAS1.update_traces(textposition='inside', textinfo='percent+label',insidetextfont=dict(color='black', weight='bold'))
         st.plotly_chart(fig_ATAS1)
     with c2:
-        fig_ATAS2 = px.pie(ATAS1, values=sv2, names= gb1,
+        fig_ATAS2 = px.pie(ATAS1, values=sv2, names=gb1,
                     title=f'Total {sv2} for each {gb1}',
                     hover_data=[sv2],color_discrete_sequence=px.colors.sequential.Magenta) 
         fig_ATAS2.update_traces(textposition='inside', textinfo='percent+label',insidetextfont=dict(color='black', weight='bold'))
-        st.plotly_chart(fig_ATAS2)
-        
+        st.plotly_chart(fig_ATAS2)    
     return None
-def GrPie(ATAS,gb1,gb2,sv1):
-    agg_data = ATAS.groupby([gb1, gb2])[sv1].sum().reset_index()
-    fig = px.sunburst(agg_data, path =[gb1,gb2],values=sv1,color = gb1,hover_data=[sv1]
+
+def GrPie(where_clause,table_name,gb1,gb2,sv1):
+    mycursor.execute(f"select {gb1},{gb2}, sum({sv1}) from {table_name} {where_clause} group by 1,2")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,gb2,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig = px.sunburst(ATAS1, path =[gb1,gb2],values=sv1,color = gb1,hover_data=[sv1]
                       ,color_continuous_scale='Agsunset')
     fig.update_traces(textinfo='label+percent parent',insidetextfont=dict(color='black', weight='bold'))
     fig.update_layout( title_text = f'{sv1} breakdown across each {gb1} and {gb2}',title_x =0 )
     st.plotly_chart(fig)
     return None
-def MapTT(df,gb,sv):
+def MapTT(where_clause,table_name,gb1,sv1):
     url= "https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/e388c4cae20aa53cb5090210a42ebb9b765c0a36/india_states.geojson"
     response= requests.get(url)
     data1= json.loads(response.content)
     states_name_tra= [feature["properties"]["ST_NM"] for feature in data1["features"]]
     states_name_tra.sort()
-    MT=df.groupby(gb)[[sv]].sum()
-    MT.reset_index(inplace= True)
-
-    fig_india_1= px.choropleth(MT, geojson= data1, locations= gb, featureidkey= "properties.ST_NM",
-                             color= sv, color_continuous_scale= "Reds",
-                             range_color= (MT[sv].min(),MT[sv].max()),
-                             hover_name= gb,title = f'Total {sv} across each State',
+    mycursor.execute(f"select {gb1},sum({sv1}) from {table_name} {where_clause} group by 1")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig_india_1= px.choropleth(ATAS1, geojson= data1, locations= gb1, featureidkey= "properties.ST_NM",
+                             color= sv1, color_continuous_scale = "Reds",
+                             range_color= (ATAS1[sv1].min(),ATAS1[sv1].max()),
+                             hover_name= gb1,title = f'Total {sv1} across each State',
                              fitbounds= "locations",width =600, height= 600)
     fig_india_1.update_geos(visible =False)
     st.plotly_chart(fig_india_1)
     return None
-def BarTTSingle(df,gb,sv1):
-    ATAY1=df.groupby(gb)[[sv1]].sum()
-    #st.write(ATAY1)
-    ATAY1.reset_index(inplace= True)
-    fig = px.bar(df, x=sv1, y=gb, orientation='h',color =gb,
-             title=f'Total {sv1} for each {gb}',color_discrete_sequence=px.colors.sequential.Agsunset_r)
+def BarTTSingle(where_clause,table_name,gb1,sv1):
+    mycursor.execute(f"select {gb1},sum({sv1}) from {table_name} {where_clause} group by 1")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig = px.bar(ATAS1, x=sv1, y=gb1, orientation='h',color =gb1,
+             title=f'Total {sv1} for each {gb1}',color_discrete_sequence=px.colors.sequential.Agsunset_r)
     st.plotly_chart(fig)
     return None
 
 
-def BarTT(df,gb,sv1,sv2):
-    ATAY1=df.groupby(gb)[[sv1,sv2]].sum()
-    #st.write(ATAY1)
-    ATAY1.reset_index(inplace= True)
-    fig_ATAY1 = go.Figure()
-    trace1= fig_ATAY1.add_trace(go.Bar(
-    x=ATAY1[gb],
-    y=ATAY1[sv1],
+def BarTT(where_clause,table_name,gb1,sv1,sv2):
+    mycursor.execute(f"select {gb1},sum({sv1}),sum({sv2}) from {table_name} {where_clause} group by 1")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1,sv2])
+    ATAS1.reset_index(inplace= True)
+    fig = go.Figure()
+    trace1= fig.add_trace(go.Bar(
+    x=ATAS1[gb1],
+    y=ATAS1[sv1],
     name=f'Total {sv1}',
     marker_color='indianred'
     ))
-    trace2=fig_ATAY1.add_trace(go.Bar(
-    x=ATAY1[gb],
-    y=ATAY1[sv2],
+    trace2=fig.add_trace(go.Bar(
+    x=ATAS1[gb1],
+    y=ATAS1[sv2],
     name=f'Total {sv2}',
     marker_color='lightsalmon'
     ))
     #fig = go.Figure(data=[trace1, trace2])
-    fig_ATAY1.update_layout(title=f'Grouped Bar Chart: {sv1} vs {sv2} by {gb}',barmode='group',xaxis_tickangle=-90)
-    st.plotly_chart(fig_ATAY1)
-    return None
-
-def lineTT(df,gb1,gb2,sv):
-    grouped_data = df.groupby([gb1, gb2 ])[sv].sum().reset_index()
-
-    # Create line chart using Plotly Express
-    fig = px.line(grouped_data, x=gb1, y=sv, color=gb2, 
-                  title=f'Total {sv} by {gb1} and {gb2}',markers=True)
+    fig.update_layout(title=f'Grouped Bar Chart: {sv1} vs {sv2} by {gb1}',barmode='group',xaxis_tickangle=-90)
     st.plotly_chart(fig)
     return None
-def lineTT2(df,gb,sv1,sv2):
+
+def lineTT(where_clause,table_name,gb1,gb2,sv1):
+    mycursor.execute(f"select {gb1},{gb2}, sum({sv1}) from {table_name} {where_clause} group by 1,2")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,gb2,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig = px.line(ATAS1, x=gb1, y=sv1, color=gb2, 
+                  title=f'Total {sv1} by {gb1} and {gb2}',markers=True)
+    st.plotly_chart(fig)
+    return None
+
+def lineTT2(where_clause,table_name,gb1,sv1,sv2):
     c1,c2=st.columns(2)
     with c1:
-        grouped_data1 = df.groupby([gb])[sv1].sum().reset_index()
-
-        # Create line chart using Plotly Express
-        fig1 = px.line(grouped_data1, x=gb, y=sv1, 
-                      title=f'Total {sv1} by {gb}',markers = True ,color_discrete_sequence=['blue'])
+        mycursor.execute(f"select {gb1},sum({sv1}) from {table_name} {where_clause} group by 1")
+        ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1])
+        ATAS1.reset_index(inplace= True)
+        fig1 = px.line(ATAS1, x=gb1, y=sv1, 
+                      title=f'Total {sv1} by {gb1}',markers = True ,color_discrete_sequence=['blue'])
         st.plotly_chart(fig1)
     with c2:
-        grouped_data2 = df.groupby([gb])[sv2].sum().reset_index()
-    
-        # Create line chart using Plotly Express
-        fig2 = px.line(grouped_data2, x=gb, y=sv2, 
-                      title=f'Total {sv2} by {gb}',markers = True,color_discrete_sequence=['Red'])
+        mycursor.execute(f"select {gb1},sum({sv2}) from {table_name} {where_clause} group by 1")
+        ATAS2 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv2])
+        ATAS2.reset_index(inplace= True)
+        fig2 = px.line(ATAS2, x=gb1, y=sv2, 
+                      title=f'Total {sv2} by {gb1}',markers = True,color_discrete_sequence=['Red'])
         st.plotly_chart(fig2)
     return None
 
-def TopPieTT(df,gb,sv):
-    ATAS1=df.groupby(gb)[[sv]].sum()
-    sorted_df = ATAS1.sort_values(by=sv,ascending = False).head(10)
-    sorted_df.reset_index(inplace= True)
-    fig_ATAS1 = px.pie(sorted_df, values=sv, names= gb,
-        title=f"Top 10 {gb} with {sv} ",hole=0.5,
-        hover_data=[sv],color_discrete_sequence=px.colors.sequential.haline_r)
+def TopPieTT(where_clause,table_name,gb1,sv1):
+    mycursor.execute(f"select {gb1},sum({sv1}) as sum_value from {table_name} {where_clause} group by 1 order by sum_value desc limit 10; ")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig_ATAS1 = px.pie(ATAS1, values=sv1, names= gb1,
+        title=f"Top 10 {gb1} with {sv1} ",hole=0.5,
+        hover_data=[sv1],color_discrete_sequence=px.colors.sequential.haline_r)
     fig_ATAS1.update_traces(textposition='inside', textinfo='percent+label',insidetextfont=dict(color='black', weight='bold'))
     st.plotly_chart(fig_ATAS1)
     return None
-def LowPieTT(df,gb,sv):
-    ATAS1=df.groupby(gb)[[sv]].sum()
-    sorted_df = ATAS1.sort_values(by=sv).head(10)
-    sorted_df.reset_index(inplace= True)
-    fig_ATAS1 = px.pie(sorted_df, values=sv, names= gb,
-        title=f"Least 10 {gb} with {sv} ",
-        hover_data=[sv],color_discrete_sequence=px.colors.sequential.haline_r)
+def LowPieTT(where_clause,table_name,gb1,sv1):
+    mycursor.execute(f"select {gb1},sum({sv1}) as sum_value from {table_name} {where_clause} group by 1 order by sum_value asc limit 10;")
+    ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=[gb1,sv1])
+    ATAS1.reset_index(inplace= True)
+    fig_ATAS1 = px.pie(ATAS1, values=sv1, names= gb1,
+        title=f"Least 10 {gb1} with {sv1} ",
+        hover_data=[sv1],color_discrete_sequence=px.colors.sequential.haline_r)
     fig_ATAS1.update_traces(textposition='inside', textinfo='percent+label',insidetextfont=dict(color='black', weight='bold'))
     st.plotly_chart(fig_ATAS1)
     return None
 
 
-def sqy_transaction_all (s,y,q,df):
-    type1 = [0,0,0]
+def sqy_transaction_all (s,y,q,mydb):
+    type1=[0,0,0]
+    conditions = []
     if s is not None:
         type1[0]=1
-        df=df[df["States"] == s]
+        conditions.append(f"State = '{s}'")
     if y is not None:
         type1[1]=1
-        if not df.empty:
-            df=df[df["Years"] == y] 
-        else:
-            df=df[df["Years"] == y]
-    if q  is not None:
+        conditions.append(f"Year = '{y}'")
+    if q is not None:
         type1[2]=1
-        if  not df.empty:
-            df=df[df["Quarter"] == q] 
-        else:
-            df=df[df["Quarter"] == q] 
-    return df,type1 
+        conditions.append(f"Quater = '{q}'")
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+    else:
+        where_clause = ""
+    type1 = [1 if condition else 0 for condition in [s, y, q]]
+    return type1,where_clause 
 
-def chartFunction(ATAS,type1):
+def chartFunction(type1,where_clause):
     ts = sum(type1)
     if ts == 1:
         if type1[0] == 1 :
-            PieTT(ATAS,'Transaction_type','Transaction_amount','Transaction_count')
-            lineTT2(ATAS,'Years','Transaction_amount','Transaction_count')
+            PieTT(where_clause,'agg_transaction','Transaction_type','Transaction_amount','Transaction_count')
+            lineTT2(where_clause,'agg_transaction','Year','Transaction_amount','Transaction_count')
         elif type1[1] == 1 :
-            BarTT(ATAS,'Transaction_type','Transaction_amount','Transaction_count')
-            PieTT(ATAS,'Quarter','Transaction_amount','Transaction_count')
+            BarTT(where_clause,'agg_transaction','Transaction_type','Transaction_amount','Transaction_count')
+            PieTT(where_clause,'agg_transaction','Quater','Transaction_amount','Transaction_count')
         else:
-            PieTT(ATAS,'Transaction_type','Transaction_amount','Transaction_count')
+            PieTT(where_clause,'agg_transaction','Transaction_type','Transaction_amount','Transaction_count')
     elif ts == 2:
         if type1[2] == 0 :
-            GrPie(ATAS,'Quarter', 'Transaction_type','Transaction_amount')
+            GrPie(where_clause,'agg_transaction','Quater', 'Transaction_type','Transaction_amount')
         elif type1[1] == 0 :
-            BarTT(ATAS,'Years','Transaction_amount','Transaction_count')
+            BarTT(where_clause,'agg_transaction','Year','Transaction_amount','Transaction_count')
         else :
-            MapTT(ATAS,'States','Transaction_amount')
-            PieTT(ATAS,'Transaction_type','Transaction_amount','Transaction_count')
+            MapTT(where_clause,'agg_transaction','State','Transaction_amount')
+            PieTT(where_clause,'agg_transaction','Transaction_type','Transaction_amount','Transaction_count')
     elif ts == 3:
-        PieTT(ATAS,'Transaction_type','Transaction_amount','Transaction_count')
+        PieTT(where_clause,'agg_transaction','Transaction_type','Transaction_amount','Transaction_count')
     return None
-def chartFunction2(type1,ATAS):
+def chartFunction2(type1,where_clause):
     ts = sum(type1)
     print(ts)
     if ts == 1:
         if type1[0] == 1 :
-            lineTT(ATAS,'Years','District','Transaction_amount')
+            lineTT(where_clause,'map_transaction','Year','District','Transaction_amount')
         elif type1[1] == 1 :
-            BarTTSingle(ATAS,'District','Transaction_amount')
+            BarTTSingle(where_clause,'map_transaction','District','Transaction_amount')
         else:
-            MapTT(ATAS,'States','Transaction_amount')
-            BarTT(ATAS,'Years','Transaction_amount','Transaction_count')            
+            MapTT(where_clause,'map_transaction','State','Transaction_amount')
+            BarTT(where_clause,'map_transaction','Year','Transaction_amount','Transaction_count')            
     elif ts == 2:
         if type1[2] == 0 :
-            GrPie(ATAS,'Quarter', 'District','Transaction_amount')
+            GrPie(where_clause,'map_transaction','Quater', 'District','Transaction_amount')
         elif type1[1] == 0 :
-            lineTT(ATAS,'Years','District','Transaction_amount')
+            lineTT(where_clause,'map_transaction','Year','District','Transaction_amount')
         else :
-            MapTT(ATAS,'States','Transaction_amount')
+            MapTT(where_clause,'map_transaction','State','Transaction_amount')
     elif ts == 3:
-        BarTT(ATAS,'District','Transaction_amount','Transaction_count')
+        BarTT(where_clause,'map_transaction','District','Transaction_amount','Transaction_count')
     return None
-def chartFunction3(ATAS,type1):
+def chartFunction3(type1,where_clause):
     ts = sum(type1)
     if ts == 1:
         if type1[0] == 1 :
-            
-            PieTT(ATAS,'Quarter',"Registered_Users","App_Opens")
-            lineTT2(ATAS,'Years','Registered_Users',"App_Opens")
+            PieTT(where_clause,'agg_user','Quater',"Registered_Users","App_Opens")
+            lineTT2(where_clause,'agg_user','Year','Registered_Users',"App_Opens")
         elif type1[1] == 1 :
-            BarTT(ATAS,'States',"Registered_Users","App_Opens")
-            PieTT(ATAS,'Quarter',"Registered_Users","App_Opens")
+            BarTT(where_clause,'agg_user','State',"Registered_Users","App_Opens")
+            PieTT(where_clause,'agg_user','Quater',"Registered_Users","App_Opens")
         else:
-            lineTT(ATAS,'Years','States','Registered_Users')
-            lineTT(ATAS,'Years','States',"App_Opens")
+            lineTT(where_clause,'agg_user','Year','States','Registered_Users')
+            lineTT(where_clause,'agg_user','Year','States',"App_Opens")
     elif ts == 2:
         if type1[2] == 0 :
-            PieTT(ATAS,'Quarter', 'Registered_Users',"App_Opens")
+            PieTT(where_clause,'agg_user','Quater', 'Registered_Users',"App_Opens")
         elif type1[1] == 0 :
-            lineTT2(ATAS,'Years','Registered_Users',"App_Opens")
+            lineTT2(where_clause,'agg_user','Year','Registered_Users',"App_Opens")
         else :
-            MapTT(ATAS,'States',"Registered_Users")
-            MapTT(ATAS,'States',"App_Opens")
-            
+            MapTT(where_clause,'agg_user','State','Registered_Users')
+            MapTT(where_clause,'agg_user','State','App_Opens')        
     elif ts == 3:
-        df = ATAS.reset_index(drop=True)
-        df.index += 1
-        st.table(df)
+        mycursor.execute(f"select State,Year,Quater,Registered_Users,App_Opens from agg_user {where_clause}")
+        ATAS1 = pd.DataFrame(mycursor.fetchall(),columns=['State','Year','Quarter','Registered Users','App Opens'])
+        ATAS1.reset_index(drop= True)
+        ATAS1.index += 1
+        st.table(ATAS1)
         
     return None
 
-def chartFunction4(type1,ATAS):
+def chartFunction4(type1,where_clause):
     ts = sum(type1)
-    print(ts)
     if ts == 1:
         if type1[0] == 1 :
-            lineTT(ATAS,'Years','District','Registered_Users')
-            BarTTSingle(ATAS,'District','App_Opens')
+            lineTT(where_clause,'map_user','Year','District','Registered_Users')
+            BarTTSingle(where_clause,'map_user','District','App_Opens')
         elif type1[1] == 1 :
-            PieTT(ATAS,'Quarter','Registered_Users',"App_Opens")
-            MapTT(ATAS,'States',"App_Opens")
+            PieTT(where_clause,'map_user','Quater','Registered_Users',"App_Opens")
+            MapTT(where_clause,'map_user','State',"App_Opens")
         else:
-            BarTT(ATAS,'District','Registered_Users',"App_Opens")        
+            BarTT(where_clause,'map_user','District','Registered_Users',"App_Opens")        
     elif ts == 2:
         if type1[2] == 0 :
-            PieTT(ATAS,'Quarter','Registered_Users',"App_Opens")
-            lineTT(ATAS,'Quarter', 'District','App_Opens')
+            PieTT(where_clause,'map_user','Quater','Registered_Users',"App_Opens")
+            lineTT(where_clause,'map_user','Quater', 'District','App_Opens')
         elif type1[1] == 0 :
-            BarTT(ATAS,'Years','App_Opens','Registered_Users')
+            BarTT(where_clause,'map_user','Year','App_Opens','Registered_Users')
             
         else :
-            MapTT(ATAS,'States',"Registered_Users")
-            MapTT(ATAS,'States',"App_Opens")
+            MapTT(where_clause,'map_user','State',"Registered_Users")
+            MapTT(where_clause,'map_user','State',"App_Opens")
     elif ts == 3:
-        BarTT(ATAS,'District','Registered_Users',"App_Opens")
+        BarTT(where_clause,'map_user','District','Registered_Users',"App_Opens")
     return None
 
-def chartfunction5(df1,df2,sv1):
+def chartfunction5(table_name1,table_name2,sv1):
     col1,col2= st.columns(2)
+    mycursor.execute(f"select min(Year) from {table_name1};")
+    min_year = mycursor.fetchall() 
+    mycursor.execute(f"select max(Year) from {table_name1};")
+    max_year = mycursor.fetchall() 
+    mycursor.execute(f"select min(Quater) from {table_name1};")
+    min_Quarter = mycursor.fetchall() 
+    mycursor.execute(f"select max(Quater) from {table_name1};")
+    max_Quarter = mycursor.fetchall() 
     with col1:
-        s1= st.slider("**Select the Year**", df1["Years"].min(), df1["Years"].max(),df1["Years"].min())
-        s2= st.slider("**Select the Quarter**", df1["Quarter"].min(), df1["Quarter"].max(),df1["Quarter"].min())
-        SQY_T ,type1= sqy_transaction_all(None,s1,s2,df1)
+        s1= st.slider("**Select the Year**",min_year[0][0],max_year[0][0])
+        if s1 == 2024:
+            s2= st.slider("**Select the Quarter**",0,1)
+        else:
+            s2= st.slider("**Select the Quarter**",min_Quarter[0][0],max_Quarter[0][0])
+        type1,where_clause= sqy_transaction_all(None,s1,s2,mydb)
     with col2:
-        TopPieTT(SQY_T,'States',sv1)
+        TopPieTT(where_clause,table_name1,'State',sv1)
     c1,c2 =st.columns(2)
     with c1:
-        TopPieTT(SQY_T,'District',sv1)
+        TopPieTT(where_clause,table_name1,'District',sv1)
     with c2:
-         SQY_T ,type1= sqy_transaction_all(None,s1,s2,df2)
-         TopPieTT(SQY_T,'Pincode',sv1)
-    unique_states = df1['States'].unique()
+         type1,where_clause= sqy_transaction_all(None,s1,s2,mydb)
+         TopPieTT(where_clause,table_name2,'Pincode',sv1)
+    mycursor.execute(f"select distinct(State) from {table_name1};")
+    unique_states = pd.DataFrame(mycursor.fetchall(),columns=['State'])
     option_dropdown4 = st.selectbox("Select the state",unique_states)
-    SQY_T ,type1= sqy_transaction_all(option_dropdown4,s1,s2,df1)
+    type1,where_clause= sqy_transaction_all(option_dropdown4,s1,s2,mydb)
     c1,c2 =st.columns(2)
     with c1:
-        TopPieTT(SQY_T,'District',sv1)
+        TopPieTT(where_clause,table_name1,'District',sv1)
     with c2:
-        SQY_T ,type1= sqy_transaction_all(option_dropdown4,s1,s2,df2)
-        TopPieTT(SQY_T,'Pincode',sv1)
+        type1,where_clause= sqy_transaction_all(option_dropdown4,s1,s2,mydb)
+        TopPieTT(where_clause,table_name2,'Pincode',sv1)
     return None 
 
 def render_logo_and_heading(logo_url, heading_text):
@@ -339,22 +316,28 @@ def render_logo_and_heading(logo_url, heading_text):
     """, unsafe_allow_html=True)
     return None 
 
-def drop_down(df,i):
+def drop_down(table_name,i):
     c1,c2,c3 = st.columns(3)
     with c1:
-        unique_states = df['States'].unique()
+        mycursor.execute(f"select distinct State from {table_name}")
+        unique_states = pd.DataFrame(mycursor.fetchall(),columns=['State'])
         option_dropdown1 = st.selectbox("Select the state",unique_states, index=None, key='k'+str(i))
         i+=1
     with c2:
-        unique_year = df['Years'].unique()
+        mycursor.execute(f"select distinct Year from {table_name}")
+        unique_year = pd.DataFrame(mycursor.fetchall(),columns=['Year'])
         option_dropdown2 = st.selectbox("Select the year",unique_year, index=None, key='k'+str(i))
         i+=1
     with c3:
-        unique_quarter = df['Quarter'].unique()
+        if option_dropdown2 == 2024:
+            unique_quarter = [1]
+        else:
+            mycursor.execute(f"select distinct Quater from {table_name}")
+            unique_quarter = pd.DataFrame(mycursor.fetchall(),columns=['Quarter'])
         option_dropdown3 = st.selectbox("Select the quarter",unique_quarter, index=None, key='k'+str(i))
         i+=1
     return (option_dropdown1,option_dropdown2,option_dropdown3)
-#Streamlit Portion
+
 # SETTING PAGE CONFIGURATIONS
 st.set_page_config(page_title= "Phonepe Pulse Data Visualization - Mamtha S")
 
@@ -422,29 +405,29 @@ if option == "Analysis":
     if option_dropdown == "Transaction":
         tab1, tab2, tab3= st.tabs(["Aggregated data Analysis", "Map data Analysis", "Top data Analysis"])
         with tab1:
-            dd1,dd2,dd3 = drop_down(agg_transaction,0)
-            SQY_T ,type1= sqy_transaction_all(dd1,dd2,dd3,agg_transaction)
-            cf=chartFunction(SQY_T,type1)
+            dd1,dd2,dd3 = drop_down('agg_transaction',0)
+            type1,where_clause= sqy_transaction_all(dd1,dd2,dd3,mydb)
+            cf=chartFunction(type1,where_clause)
         with tab2:
-            dd4,dd5,dd6 = drop_down(map_transaction,3)
-            SQY_T ,type1= sqy_transaction_all(dd4,dd5,dd6,map_transaction)
-            cf2=chartFunction2(type1,SQY_T)
+            dd4,dd5,dd6 = drop_down('map_transaction',3)
+            type1,where_clause= sqy_transaction_all(dd4,dd5,dd6,mydb)
+            cf2=chartFunction2(type1,where_clause)
         with tab3:
-            cf5 =chartfunction5(top_district_transaction,top_pincode_transaction,'Transaction_amount')
+            cf5 =chartfunction5('top_district_transaction','top_pincode_transaction','Transaction_amount')
             
     if option_dropdown == "User":
         tab1, tab2, tab3= st.tabs(["Aggregated data Analysis", "Map data Analysis", "Top data Analysis"])
         with tab1:
-            dd7,dd8,dd9 = drop_down(agg_user,6)
-            SQY_T ,type1= sqy_transaction_all(dd7,dd8,dd9,agg_user)
-            cf3=chartFunction3(SQY_T,type1)
+            dd7,dd8,dd9 = drop_down('agg_user',6)
+            type1,where_clause= sqy_transaction_all(dd7,dd8,dd9,mydb)
+            cf3=chartFunction3(type1,where_clause)
         with tab2:
-            dd10,d11,dd12 = drop_down(map_transaction,9)
-            SQY_T ,type1= sqy_transaction_all(dd10,d11,dd12,map_user)
-            cf4=chartFunction4(type1,SQY_T)
-            SQY_T1 ,type2= sqy_transaction_all(dd10,d11,dd12,agg_user_brand)
+            dd10,d11,dd12 = drop_down('map_user',9)
+            type1,where_clause= sqy_transaction_all(dd10,d11,dd12,mydb)
+            cf4=chartFunction4(type1,where_clause)
+            #type1,where_clause= sqy_transaction_all(dd10,d11,dd12,mydb)
         with tab3:
-            cf6 = chartfunction5(top_district_user,top_pincode_user,'Registered_Users')
+            cf6 = chartfunction5('top_district_user','top_pincode_user','Registered_Users')
 if option == "Insights":
     q= st.selectbox('Select your Question:',
                               ('1. 10 States with lowest transactions',
@@ -459,42 +442,41 @@ if option == "Insights":
                                '10.Top most used Transaction type'),
                               key='collection_question')
     if q == '1. 10 States with lowest transactions':
-        LowPieTT(agg_transaction,'States','Transaction_amount')
+        LowPieTT('','agg_transaction','State','Transaction_amount')
     if q == '2. 10 States with Lowest registered users':
-        LowPieTT(agg_user,'States','Registered_Users')
+        LowPieTT('','agg_user','State','Registered_Users')
     if q == '3. 25 Districts with highest App opens':
-        grouped_data_q3 = map_user.groupby(["District"])["App_Opens"].sum().reset_index()
-        sorted_data1_q3 = grouped_data_q3.sort_values(by="District",ascending = False).head(25)
+        mycursor.execute(f"select District,sum(App_Opens) as sum_value from map_user group by 1 order by sum_value desc limit 25; ")
+        sorted_data1_q3 = pd.DataFrame(mycursor.fetchall(),columns=['District','App_Opens'])
         fig_q3= px.bar(sorted_data1_q3, x= "District", y= "App_Opens", title= "25 Districts with highest App opens",
             color_discrete_sequence= px.colors.sequential.Mint_r)
         st.plotly_chart(fig_q3) 
     if q == '4. 10 Districts with lowest transactions':
-        LowPieTT(map_transaction,'District','Transaction_amount')
+        LowPieTT('','map_transaction','District','Transaction_amount')
     if q == '5. 10 Postal codes with lowest Registered users':
-        LowPieTT(top_pincode_user,'Pincode','Registered_Users') 
+        LowPieTT('','top_pincode_user','Pincode','Registered_Users') 
     if q == '6. Top 5 Years with lowest transaction':
-        grouped_data_q6 = agg_transaction.groupby(["Years"])["Transaction_amount"].sum().reset_index()
-        sorted_data1_q6 = grouped_data_q6.sort_values(by="Years",ascending = True).head(5)
-        print(sorted_data1_q6)
+        mycursor.execute(f"select Year,sum(Transaction_amount) as sum_value from agg_transaction group by 1 order by sum_value asc limit 5; ")
+        sorted_data1_q6 = pd.DataFrame(mycursor.fetchall(),columns=['Years','Transaction_amount'])
         fig_q6 = px.line(sorted_data1_q6, x="Years", y="Transaction_amount", title="Top 5 years with lowest transactions",markers = True ,color_discrete_sequence=['blue'])
         st.plotly_chart(fig_q6)   
     if q == '7. Top 5 Years with highest transaction':
-        grouped_data_q7 = agg_transaction.groupby(["Years"])["Transaction_amount"].sum().reset_index()
-        sorted_data1_q7 = grouped_data_q7.sort_values(by="Years",ascending = False).head(5)
+        mycursor.execute(f"select Year,sum(Transaction_amount) as sum_value from agg_transaction group by 1 order by sum_value desc limit 5; ")
+        sorted_data1_q7 = pd.DataFrame(mycursor.fetchall(),columns=['Years','Transaction_amount'])
         fig_q7 = px.line(sorted_data1_q7, x="Years", y="Transaction_amount", title="Top 5 Years with highest transactions",markers = True ,color_discrete_sequence=['black'])
         st.plotly_chart(fig_q7)  
     if q == '8. Top Mobile Brands users':
-        grouped_data_q8= agg_user_brand.groupby("Mobile_brand")["User_count"].sum().sort_values(ascending=False)
-        sorted_data1_q8= pd.DataFrame(grouped_data_q8).reset_index()
+        mycursor.execute(f"select Mobile_brand,sum(User_count) as sum_value from agg_user_brand group by 1 order by sum_value desc limit 5; ")
+        sorted_data1_q8 = pd.DataFrame(mycursor.fetchall(),columns=['Mobile_brand','User_count'])
         fig_q8= px.pie(sorted_data1_q8, values= "User_count", names= "Mobile_brand", color_discrete_sequence=px.colors.sequential.dense_r,
                        title= "Top Mobile Brands users")
         fig_q8.update_traces(textposition='inside', textinfo='percent+label',insidetextfont=dict(color='black', weight='bold'))
         st.plotly_chart(fig_q8)
     if q == '9. Districts with highest transaction count':
-        TopPieTT(top_district_transaction,'District','Transaction_count')
+        TopPieTT('','top_district_transaction','District','Transaction_count')
     if q == '10.Top most used Transaction type':
-        grouped_data_q10 = agg_transaction.groupby(["Transaction_type"])["Transaction_amount"].sum().reset_index()
-        sorted_data1_q10 = grouped_data_q10.sort_values(by="Transaction_type",ascending = False).head(2)
+        mycursor.execute(f"select Transaction_type,sum(Transaction_amount) as sum_value from agg_transaction group by 1 order by sum_value desc limit 2; ")
+        sorted_data1_q10 = pd.DataFrame(mycursor.fetchall(),columns=['Transaction_type','Transaction_amount'])
         fig_q10= px.pie(sorted_data1_q10, values= "Transaction_amount", names= "Transaction_type", title="Top most used Transaction type",
                 color_discrete_sequence=px.colors.sequential.Emrld_r)
         st.plotly_chart(fig_q10)
